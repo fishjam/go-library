@@ -17,9 +17,10 @@ import (
  * VirtualWriter is similar as go multipart.Writer, but can support upload large files( 4G+ ) with little memory consume.
  */
 
-type OnProgressCallback func(part Part, err error, readCount, totalCount int64)
+type OnProgressCallback func(part VirtualPart, err error, readCount, totalCount int64)
 
-type Part interface {
+// VirtualPart generates multipart messages with little memory consume when upload file
+type VirtualPart interface {
 	Name() string //return description
 	Len() int64
 	Read(p []byte) (n int, err error)
@@ -142,7 +143,7 @@ func (fp *FilePart) Close() (err error) {
 type VirtualWriter struct {
 	closeAfterRead bool
 	boundary       string
-	parts          []Part
+	parts          []VirtualPart
 	readPartIndex  int
 	readCount      int64
 	totalCount     int64
@@ -154,7 +155,7 @@ func NewVirtualWriter() *VirtualWriter {
 	return &VirtualWriter{
 		closeAfterRead: true,
 		boundary:       boundary,
-		parts:          make([]Part, 0),
+		parts:          make([]VirtualPart, 0),
 		readPartIndex:  0,
 		readCount:      0,
 		totalCount:     int64(len(boundary) + 6), //init total count is for last boundary(--%s--\r\n)
@@ -274,7 +275,7 @@ func (vw *VirtualWriter) Read(p []byte) (nRead int, err error) {
 	if vw.readPartIndex < len(vw.parts) {
 		part := vw.parts[vw.readPartIndex]
 		nRead, err = part.Read(p) //p[nb:])
-		//flog.Debugf("idx[%d], part read, nRead=%d, remain=%d, err=%+v",
+		//log.Printf("idx[%d], part read, nRead=%d, remain=%d, err=%+v",
 		//	vw.readPartIndex, nRead, part.Remain(), err)
 
 		if err == nil {
@@ -303,7 +304,7 @@ func (vw *VirtualWriter) Read(p []byte) (nRead int, err error) {
 			nRead += nReadLastBoundary
 			err = io.EOF
 		}
-		vw.readCount += int64(nRead)
+		vw.readCount += int64(nReadLastBoundary)
 		if vw.callback != nil {
 			vw.callback(nil, err, vw.readCount, vw.totalCount)
 		}
