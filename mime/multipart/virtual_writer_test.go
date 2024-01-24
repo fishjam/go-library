@@ -4,9 +4,10 @@ import (
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
-	"github.com/stretchr/testify/assert"
+	"github.com/fishjam/go-library/utils"
 	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -17,24 +18,25 @@ import (
 	"time"
 )
 
-// please Notice: after this test case run, will create upload folder, and upload some files into it,
-// can compare the content
+// Notice: after this test case run, will create upload folder, and upload some files into it,
+// then compare the source and target file's md5
 func TestUploadFileWithVirtualWriter(t *testing.T) {
+	//local fiddler proxy port, if not 0(example: 8888), then can use local fiddle to monitor network data
+	localProxyPort := 0
+	removeUploadFiles := true
 
-	uploadTempFolder, err := os.MkdirTemp(os.TempDir(), "virtual_writer")
+	uploadTempFolder := utils.VerifyWithResult[string](os.MkdirTemp(os.TempDir(), "virtual_writer"))
 	t.Logf("uploadTempFolder=%s", uploadTempFolder)
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mpReader, err := r.MultipartReader()
-		//t.Logf("mpReader type is %+v, err=%+v", reflect.TypeOf(mpReader), err)
+		mpReader := utils.VerifyWithResult[*multipart.Reader](r.MultipartReader())
 
 		uploadFields := make(map[string]string)
-		err = os.MkdirAll(uploadTempFolder, 0755)
-		assert.Nil(t, err, fmt.Sprintf("create upload temp folder:%s", uploadTempFolder))
+		_ = utils.Verify(os.MkdirAll(uploadTempFolder, 0755))
 
 		for {
 			part, err := mpReader.NextPart()
-			//必须判断
+			//part, err := utils.VerifyWithResultEx[*multipart.Part](mpReader.NextPart())
 			if err == io.EOF {
 				//t.Logf("nextPart end,")
 				break
@@ -56,15 +58,14 @@ func TestUploadFileWithVirtualWriter(t *testing.T) {
 
 			filename := part.FileName()
 			filePath := path.Join(uploadTempFolder, filename)
-			outFile, err := os.Create(filePath)
-			assert.Nil(t, err, fmt.Sprintf("create upload file: %s", filePath))
+			outFile := utils.VerifyWithResult[*os.File](os.Create(filePath))
 			defer outFile.Close()
 
-			_, err = io.Copy(outFile, part)
+			_ = utils.VerifyWithResult[int64](io.Copy(outFile, part))
 		}
-		marshalResult, err := json.Marshal(uploadFields)
+		marshalResult := utils.VerifyWithResult[[]byte](json.Marshal(uploadFields))
 		w.WriteHeader(http.StatusOK)
-		w.Write(marshalResult)
+		_ = utils.VerifyWithResult[int](w.Write(marshalResult))
 	}))
 
 	defer ts.Close()
@@ -87,7 +88,6 @@ func TestUploadFileWithVirtualWriter(t *testing.T) {
 	}
 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
-	localProxyPort := 0
 	if localProxyPort != 0 {
 		proxyAddr := fmt.Sprintf("http://127.0.0.1:%d", localProxyPort)
 		proxyUrl, _ := url.Parse(proxyAddr)
@@ -109,7 +109,7 @@ func TestUploadFileWithVirtualWriter(t *testing.T) {
 
 		//t.Logf("on progress: part name=%s, err=%+v, readCount=%d, totalCount=%d, percent=%0.2f",
 		//	name, err, readCount, totalCount, float64(readCount*100)/float64(totalCount))
-		assert.True(t, readCount <= totalCount, "progress")
+		utils.GoAssertTrue(t, readCount <= totalCount, "progress")
 	})
 
 	defer mpWrite.Close()
@@ -121,8 +121,7 @@ func TestUploadFileWithVirtualWriter(t *testing.T) {
 	fileIndex := 0
 	for _, uf := range uploadFiles {
 		fieldName := fmt.Sprintf("file%d", fileIndex)
-		err = mpWrite.CreateFormFile(fieldName, uf)
-		assert.Nil(t, err, "CreateFormFile")
+		_ = utils.Verify(mpWrite.CreateFormFile(fieldName, uf))
 		uploadResultExpected[fieldName] = filepath.Base(uf)
 		fileIndex++
 	}
@@ -132,18 +131,17 @@ func TestUploadFileWithVirtualWriter(t *testing.T) {
 
 	req.Header.Set("Content-Type", mpWrite.FormDataContentType())
 	resp, err := client.Do(req)
-	assert.Nil(t, err, "client.Do should successful")
+	utils.GoAssertTrue(t, err == nil, "client.Do should successful")
 
 	if err == nil {
-		body, err := io.ReadAll(resp.Body)
+		body := utils.VerifyWithResult[[]byte](io.ReadAll(resp.Body))
 		defer resp.Body.Close()
 
 		var uploadResponse map[string]string
-		err = json.Unmarshal(body, &uploadResponse)
-		assert.Nil(t, err, "unmarshal result successful")
+		_ = utils.Verify(json.Unmarshal(body, &uploadResponse))
 		t.Logf("response=%s, err=%+v", string(body), err)
 
-		assert.Equal(t, uploadResultExpected, uploadResponse, "upload result")
+		utils.GoAssertEqual(t, uploadResultExpected, uploadResponse, "upload result")
 	}
 
 	for idx, uf := range uploadFiles {
@@ -151,14 +149,16 @@ func TestUploadFileWithVirtualWriter(t *testing.T) {
 
 		dstPath := path.Join(uploadTempFolder, filepath.Base(uf))
 		dstSum := fileCheckSum(dstPath)
-		assert.Equal(t, srcSum, dstSum, fmt.Sprintf("compare[%d] %s <=> %s", idx, uf, dstPath))
+		utils.GoAssertEqual(t, srcSum, dstSum, fmt.Sprintf("compare[%d] %s <=> %s", idx, uf, dstPath))
 	}
 
 	//use sleep to wait, so can verify memory usage, or runtime.MemStats?
 	if false {
 		time.Sleep(time.Second * 30)
 	}
-	os.RemoveAll(uploadTempFolder)
+	if removeUploadFiles {
+		_ = utils.Verify(os.RemoveAll(uploadTempFolder))
+	}
 }
 
 func fileCheckSum(fileName string) string {
