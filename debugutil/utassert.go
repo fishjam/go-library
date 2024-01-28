@@ -1,4 +1,4 @@
-package utils
+package debugutil
 
 import (
 	"fmt"
@@ -28,7 +28,7 @@ func GoAssertTrue(t *testing.T, bAssert bool, msg string) {
 	}
 }
 
-// TODO: 和 assert.equal 比较?
+// TODO: compare with assert.equal
 func GoAssertEqual(t *testing.T, expected, actual any, msg string) {
 	t.Helper()
 	isEqual := false

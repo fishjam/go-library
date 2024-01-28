@@ -13,37 +13,44 @@ import (
 	"sync"
 )
 
-/**
- * VirtualWriter is similar as go multipart.Writer, but can support upload large files( 4G+ ) with little memory consume.
- */
-
+// OnProgressCallback provide progress callback when do real POST, it's useful when uploading large files.
+//
+// Notice: the part is nil and err is EOF when send last end boundary.
 type OnProgressCallback func(part VirtualPart, err error, readCount, totalCount int64)
 
-// VirtualPart generates multipart messages with little memory consume when upload file
+// VirtualPart handle all the part's content and provide detail information in OnProgressCallback
 type VirtualPart interface {
-	Name() string //return description
+	// Name returns current field name
+	Name() string
+
+	// Len returns current part length, include boundary
 	Len() int64
-	Read(p []byte) (n int, err error)
+
+	// Remain returns current remain length while reading
 	Remain() int64
+
+	// Close closes the part(FilePart)
 	Close() error
+
+	read(p []byte) (n int, err error)
 }
 
-type FieldPart struct {
+type fieldPart struct {
 	fieldName   string
 	fieldValue  string
 	fieldLength int64
 	readOffset  int64
 }
 
-func (fp *FieldPart) Name() string {
+func (fp *fieldPart) Name() string {
 	return fp.fieldName
 }
 
-func (fp *FieldPart) Len() int64 {
+func (fp *fieldPart) Len() int64 {
 	return fp.fieldLength
 }
 
-func (fp *FieldPart) Read(p []byte) (n int, err error) {
+func (fp *fieldPart) read(p []byte) (n int, err error) {
 	reader := bytes.NewReader([]byte(fp.fieldValue[fp.readOffset:]))
 	bufReader := bufio.NewReader(reader)
 	n, err = bufReader.Read(p)
@@ -53,15 +60,15 @@ func (fp *FieldPart) Read(p []byte) (n int, err error) {
 	fp.readOffset += int64(n)
 	return
 }
-func (fp *FieldPart) Remain() int64 {
+func (fp *fieldPart) Remain() int64 {
 	return fp.fieldLength - fp.readOffset
 }
 
-func (fp *FieldPart) Close() error {
+func (fp *fieldPart) Close() error {
 	return nil
 }
 
-type FilePart struct {
+type filePart struct {
 	fieldValue  string
 	fieldLength int64
 	readOffset  int64
@@ -71,16 +78,16 @@ type FilePart struct {
 	once        sync.Once
 }
 
-func (fp *FilePart) Name() string {
+func (fp *filePart) Name() string {
 	return fp.filePath
 }
 
-func (fp *FilePart) Len() int64 {
+func (fp *filePart) Len() int64 {
 	//the last 2 is last \r\n after file content
 	return fp.fieldLength + fp.fileSize + 2
 }
 
-func (fp *FilePart) Read(p []byte) (n int, err error) {
+func (fp *filePart) read(p []byte) (n int, err error) {
 	var (
 		nField    int
 		nFile     int
@@ -128,11 +135,11 @@ func (fp *FilePart) Read(p []byte) (n int, err error) {
 	return n, err
 }
 
-func (fp *FilePart) Remain() int64 {
+func (fp *filePart) Remain() int64 {
 	return fp.Len() - fp.readOffset
 }
 
-func (fp *FilePart) Close() (err error) {
+func (fp *filePart) Close() (err error) {
 	if fp.file != nil {
 		err = fp.file.Close()
 		fp.file = nil
@@ -140,16 +147,20 @@ func (fp *FilePart) Close() (err error) {
 	return err
 }
 
+// VirtualWriter is similar as builtin [mime/multipart.writer],
+// but can support upload lots of files (4G+) with little memory consume.
 type VirtualWriter struct {
 	closeAfterRead bool
 	boundary       string
 	parts          []VirtualPart
+	finished       bool
 	readPartIndex  int
 	readCount      int64
 	totalCount     int64
 	callback       OnProgressCallback
 }
 
+// NewVirtualWriter returns a new multipart writer with a random boundary,
 func NewVirtualWriter() *VirtualWriter {
 	boundary := randomBoundary()
 	return &VirtualWriter{
@@ -162,11 +173,15 @@ func NewVirtualWriter() *VirtualWriter {
 	}
 }
 
+// SetCloseAfterRead close the part immediately after read the part, it's used in file part, default is true
 func (vw *VirtualWriter) SetCloseAfterRead(closeAfterRead bool) {
 	vw.closeAfterRead = closeAfterRead
 }
 
-// SetBoundary copy from multipart.Writer#SetBoundary
+// SetBoundary overrides the VirtualWriter's default randomly-generated
+// boundary separator with an explicit value.
+//
+// Copy from built-in multipart.Writer, and modify for totalCount
 func (vw *VirtualWriter) SetBoundary(boundary string) error {
 	if len(vw.parts) > 0 {
 		return errors.New("mime: SetBoundary called after write")
@@ -198,7 +213,10 @@ func (vw *VirtualWriter) SetBoundary(boundary string) error {
 	return nil
 }
 
-// FormDataContentType copy from multipart.Writer#FormDataContentType
+// FormDataContentType returns the Content-Type for an HTTP
+// multipart/form-data with this Writer's Boundary.
+//
+// Copy from built-in multipart.Writer #FormDataContentType
 func (vw *VirtualWriter) FormDataContentType() string {
 	b := vw.boundary
 	// We must quote the boundary if it contains any of the
@@ -224,14 +242,13 @@ func escapeQuotes(s string) string {
 	return quoteEscaper.Replace(s)
 }
 
-func (vw *VirtualWriter) BoundaryLength() int {
-	return len(vw.boundary)
-}
-
+// SetProgressCallback set the callback function
 func (vw *VirtualWriter) SetProgressCallback(callback OnProgressCallback) {
 	vw.callback = callback
 }
 
+// CreateFormFile creates a new form-data header with the provided field name and file name.
+// But it just remains the file information, will not read the file contents to memory until actual POST occurs.
 func (vw *VirtualWriter) CreateFormFile(fieldName, filePath string) error {
 	stat, err := os.Stat(filePath)
 	if err != nil {
@@ -242,7 +259,7 @@ func (vw *VirtualWriter) CreateFormFile(fieldName, filePath string) error {
 		"Content-Type: application/octet-stream\r\n\r\n",
 		vw.boundary, escapeQuotes(fieldName), filepath.Base(filePath))
 
-	part := FilePart{
+	part := filePart{
 		fieldValue:  fieldValue,
 		filePath:    filePath,
 		fieldLength: int64(len(fieldValue)),
@@ -254,10 +271,12 @@ func (vw *VirtualWriter) CreateFormFile(fieldName, filePath string) error {
 	return nil
 }
 
+// WriteField creates a new form-data header with the provided field name and value
 func (vw *VirtualWriter) WriteField(fieldName, value string) error {
 	fieldVal := fmt.Sprintf("--%s\r\nContent-Disposition: form-data; name=\"%s\"\r\n\r\n%s\r\n",
-		vw.boundary, escapeQuotes(fieldName), value)
-	part := FieldPart{
+		vw.boundary,
+		escapeQuotes(fieldName), value)
+	part := fieldPart{
 		fieldName:   fieldName,
 		fieldValue:  fieldVal,
 		fieldLength: int64(len(fieldVal)),
@@ -268,13 +287,16 @@ func (vw *VirtualWriter) WriteField(fieldName, value string) error {
 	return nil
 }
 
+// Read is used for Reader function(example: body parameter for http.NewRequest),
+// user should NOT call it directly.
 func (vw *VirtualWriter) Read(p []byte) (nRead int, err error) {
 	var (
 		nReadLastBoundary int
 	)
+
 	if vw.readPartIndex < len(vw.parts) {
 		part := vw.parts[vw.readPartIndex]
-		nRead, err = part.Read(p) //p[nb:])
+		nRead, err = part.read(p) //p[nb:])
 		//log.Printf("idx[%d], part read, nRead=%d, remain=%d, err=%+v",
 		//	vw.readPartIndex, nRead, part.Remain(), err)
 
@@ -294,7 +316,6 @@ func (vw *VirtualWriter) Read(p []byte) (nRead int, err error) {
 			vw.callback(part, err, vw.readCount, vw.totalCount)
 		}
 	}
-
 	if vw.readPartIndex >= len(vw.parts) {
 		//already read all part's data
 		strLastBoundary := fmt.Sprintf("--%s--\r\n", vw.boundary)
@@ -309,14 +330,15 @@ func (vw *VirtualWriter) Read(p []byte) (nRead int, err error) {
 			vw.callback(nil, err, vw.readCount, vw.totalCount)
 		}
 	}
-
 	return nRead, err
 }
 
+// ContentLength return content length for all parts, it should same as "Content-Length" in http header
 func (vw *VirtualWriter) ContentLength() int64 {
 	return vw.totalCount
 }
 
+// Close closes all the parts
 func (vw *VirtualWriter) Close() error {
 	var err error
 	for _, part := range vw.parts {

@@ -7,7 +7,9 @@ import (
 // ILogger in go-library, just need Warnf, so can used in verify,
 // user should call `SetLoggerFactory` to customize the logger
 type ILogger interface {
+	//Infof(format string, args ...any)
 	Warnf(format string, args ...any)
+	//Errorf(format string, args ...any)
 }
 
 // LoggerFactory is the factory method for creating logger used for the specified package.
@@ -20,12 +22,34 @@ func SetLoggerFactory(factory LoggerFactory) {
 type defaultLogger struct {
 }
 
+func (l *defaultLogger) Infof(format string, args ...any) {
+	if l != nil {
+		log.Printf("[INFO] "+format, args...)
+	}
+}
+
 func (l *defaultLogger) Warnf(format string, args ...any) {
-	log.Printf(format, args...)
+	if l != nil {
+		log.Printf("[WARN] "+format, args...)
+	}
+}
+
+func (l *defaultLogger) Errorf(format string, args ...any) {
+	if l != nil {
+		log.Printf("[ERROR] "+format, args...)
+	}
 }
 
 var _curLogger ILogger = &defaultLogger{}
 
+//func Infof(format string, args ...any) {
+//	_curLogger.Infof(format, args...)
+//}
+
 func Warnf(format string, args ...any) {
 	_curLogger.Warnf(format, args...)
 }
+
+//func Errorf(format string, args ...any) {
+//	_curLogger.Errorf(format, args...)
+//}

@@ -1,5 +1,10 @@
 # go-library
 
+### 中文用户请看 [这里](README_zh.md)
+
+### Usage
+- `go get github.com/fishjam/go-library`
+
 ### Some go common functions
   - verify: help functions to handle go error
     - refer [Write bug-free code with CSTD(Code Self Test  Development)/使用CSTD技术轻松编写0Bug的代码](doc/使用CSTD技术轻松编写0Bug的代码.doc) , only Chinese now.
@@ -11,5 +16,4 @@
 ### Notice
   - 1. Don't use any other 3rd library(example: log,ut) with minimum import impact.
 
-### Usage
-  - `go get github.com/fishjam/go-library`
+

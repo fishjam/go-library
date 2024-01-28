@@ -4,10 +4,9 @@ import (
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
-	"github.com/fishjam/go-library/utils"
+	"github.com/fishjam/go-library/debugutil"
 	"io"
 	"log"
-	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -18,27 +17,35 @@ import (
 	"time"
 )
 
-// Notice: after this test case run, will create upload folder, and upload some files into it,
+// TestUploadFileWithVirtualWriter
+// after this test case run, will create upload folder, and upload some files into it,
 // then compare the source and target file's md5
-func TestUploadFileWithVirtualWriter(t *testing.T) {
+func TestUploadFilesWithVirtualWriter(t *testing.T) {
 	//local fiddler proxy port, if not 0(example: 8888), then can use local fiddle to monitor network data
 	localProxyPort := 0
+
+	//this UT will remove all upload files after test, if you want remains the uploaded files to compare,
+	//can set removeUploadFiles to false
 	removeUploadFiles := true
 
-	uploadTempFolder := utils.VerifyWithResult[string](os.MkdirTemp(os.TempDir(), "virtual_writer"))
+	uploadTempFolder := debugutil.VerifyWithResult(os.MkdirTemp(os.TempDir(), "virtual_writer"))
 	t.Logf("uploadTempFolder=%s", uploadTempFolder)
+	if removeUploadFiles {
+		defer func() {
+			_ = debugutil.Verify(os.RemoveAll(uploadTempFolder))
+		}()
+	}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mpReader := utils.VerifyWithResult[*multipart.Reader](r.MultipartReader())
+		mpReader := debugutil.VerifyWithResult(r.MultipartReader())
 
 		uploadFields := make(map[string]string)
-		_ = utils.Verify(os.MkdirAll(uploadTempFolder, 0755))
+		_ = debugutil.Verify(os.MkdirAll(uploadTempFolder, 0755))
 
 		for {
 			part, err := mpReader.NextPart()
 			//part, err := utils.VerifyWithResultEx[*multipart.Part](mpReader.NextPart())
 			if err == io.EOF {
-				//t.Logf("nextPart end,")
 				break
 			}
 
@@ -58,14 +65,14 @@ func TestUploadFileWithVirtualWriter(t *testing.T) {
 
 			filename := part.FileName()
 			filePath := path.Join(uploadTempFolder, filename)
-			outFile := utils.VerifyWithResult[*os.File](os.Create(filePath))
+			outFile := debugutil.VerifyWithResult(os.Create(filePath))
 			defer outFile.Close()
 
-			_ = utils.VerifyWithResult[int64](io.Copy(outFile, part))
+			_ = debugutil.VerifyWithResult(io.Copy(outFile, part))
 		}
-		marshalResult := utils.VerifyWithResult[[]byte](json.Marshal(uploadFields))
+		marshalResult := debugutil.VerifyWithResult(json.Marshal(uploadFields))
 		w.WriteHeader(http.StatusOK)
-		_ = utils.VerifyWithResult[int](w.Write(marshalResult))
+		_ = debugutil.VerifyWithResult(w.Write(marshalResult))
 	}))
 
 	defer ts.Close()
@@ -77,9 +84,10 @@ func TestUploadFileWithVirtualWriter(t *testing.T) {
 	uploadFiles := []string{
 		"virtual_writer.go",
 		"virtual_writer_test.go",
-		//"not_exist",
+		"not_exist",
+
+		// some large file
 		//"F:\\ISO\\Windows\\Win10\\Win10_21H2_x64_CN_20220412.iso",
-		//"D:\\Git\\git-bash.exe",
 	}
 	params := map[string]string{
 		"key":          "value",
@@ -99,6 +107,10 @@ func TestUploadFileWithVirtualWriter(t *testing.T) {
 		Transport: transport,
 	}
 	mpWrite := NewVirtualWriter()
+	defer func() {
+		_ = debugutil.Verify(mpWrite.Close())
+	}()
+
 	//_ = mpWrite.SetBoundary("----WebKitFormBoundary2HwfBAoBw2hJ33gD")
 	mpWrite.SetProgressCallback(func(part VirtualPart, err error, readCount, totalCount int64) {
 		name := "<last>"
@@ -107,12 +119,11 @@ func TestUploadFileWithVirtualWriter(t *testing.T) {
 		}
 		_ = name
 
-		//t.Logf("on progress: part name=%s, err=%+v, readCount=%d, totalCount=%d, percent=%0.2f",
-		//	name, err, readCount, totalCount, float64(readCount*100)/float64(totalCount))
-		utils.GoAssertTrue(t, readCount <= totalCount, "progress")
+		t.Logf("on progress: part name=%s, err=%+v, readCount=%d, totalCount=%d, percent=%0.2f",
+			name, err, readCount, totalCount, float64(readCount*100)/float64(totalCount))
+		debugutil.GoAssertTrue(t, readCount <= totalCount, "progress")
 	})
 
-	defer mpWrite.Close()
 	for key, val := range params {
 		_ = mpWrite.WriteField(key, val)
 		uploadResultExpected[key] = val
@@ -121,7 +132,12 @@ func TestUploadFileWithVirtualWriter(t *testing.T) {
 	fileIndex := 0
 	for _, uf := range uploadFiles {
 		fieldName := fmt.Sprintf("file%d", fileIndex)
-		_ = utils.Verify(mpWrite.CreateFormFile(fieldName, uf))
+		if err := debugutil.Verify(mpWrite.CreateFormFile(fieldName, uf)); err != nil {
+			t.Logf("CreateFormFile error, %+v", err)
+			//in real code, should handle this error and maybe return
+
+			//return
+		}
 		uploadResultExpected[fieldName] = filepath.Base(uf)
 		fileIndex++
 	}
@@ -131,34 +147,34 @@ func TestUploadFileWithVirtualWriter(t *testing.T) {
 
 	req.Header.Set("Content-Type", mpWrite.FormDataContentType())
 	resp, err := client.Do(req)
-	utils.GoAssertTrue(t, err == nil, "client.Do should successful")
+	debugutil.GoAssertTrue(t, err == nil, "client.Do should successful")
 
 	if err == nil {
-		body := utils.VerifyWithResult[[]byte](io.ReadAll(resp.Body))
+		body := debugutil.VerifyWithResult[[]byte](io.ReadAll(resp.Body))
 		defer resp.Body.Close()
 
 		var uploadResponse map[string]string
-		_ = utils.Verify(json.Unmarshal(body, &uploadResponse))
+		_ = debugutil.Verify(json.Unmarshal(body, &uploadResponse))
 		t.Logf("response=%s, err=%+v", string(body), err)
 
-		utils.GoAssertEqual(t, uploadResultExpected, uploadResponse, "upload result")
+		debugutil.GoAssertEqual(t, uploadResultExpected, uploadResponse, "upload result")
 	}
 
+	//check the uploaded files, should same as original files by check sum(MD5)
 	for idx, uf := range uploadFiles {
 		srcSum := fileCheckSum(uf)
 
 		dstPath := path.Join(uploadTempFolder, filepath.Base(uf))
 		dstSum := fileCheckSum(dstPath)
-		utils.GoAssertEqual(t, srcSum, dstSum, fmt.Sprintf("compare[%d] %s <=> %s", idx, uf, dstPath))
+
+		debugutil.GoAssertEqual(t, srcSum, dstSum, fmt.Sprintf("compare[%d] %s <=> %s", idx, uf, dstPath))
 	}
 
 	//use sleep to wait, so can verify memory usage, or runtime.MemStats?
 	if false {
 		time.Sleep(time.Second * 30)
 	}
-	if removeUploadFiles {
-		_ = utils.Verify(os.RemoveAll(uploadTempFolder))
-	}
+
 }
 
 func fileCheckSum(fileName string) string {
@@ -178,6 +194,5 @@ func fileCheckSum(fileName string) string {
 		log.Fatal(err)
 	}
 
-	// 格式化为16进制字符串
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
