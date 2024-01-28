@@ -1,8 +1,9 @@
 # go-library
 
+ [![Go Reference](https://pkg.go.dev/badge/github.com/fishjam/go-library.svg)](https://pkg.go.dev/github.com/fishjam/go-library)
+
 #### 介绍
 在学习和工作中整理的一些常见的辅助类和函数，相当于我的 framework
-
 
 #### 功能列表
 

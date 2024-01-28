@@ -1,5 +1,7 @@
 # go-library
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/fishjam/go-library.svg)](https://pkg.go.dev/github.com/fishjam/go-library)
+
 ### 中文用户请看 [这里](README_zh.md)
 
 ### Usage
