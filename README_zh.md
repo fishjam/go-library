@@ -10,7 +10,6 @@
 1. debugutil: 一些为了方便开发和调试的辅助函数
    - verifyXxx 
      - 使用 CSTD(Code Self Test  Development) 技术方式辅助处理 error(不需要编写大量的 if 来处理error,又不会遗漏 error)
-     - 参见文档: [Write bug-free code with CSTD(Code Self Test  Development)/使用CSTD技术轻松编写0Bug的代码](doc/使用CSTD技术轻松编写0Bug的代码.doc) 
 2. flog: 为了在 verify 中使用,定义的简单日志封装接口,一般来说,用户需要使用 `SetLoggerFactory` 进行定制
 3. mime/multipart/VirtualWriter:
    - 类似于内置的 `multipart.Writer`,但是能在不耗费大量内存的前提下同时上传很多(4G+)文件

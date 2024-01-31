@@ -9,7 +9,6 @@
 
 ### Some go common functions
   - verify: help functions to handle go error
-    - refer [Write bug-free code with CSTD(Code Self Test  Development)/使用CSTD技术轻松编写0Bug的代码](doc/使用CSTD技术轻松编写0Bug的代码.doc) , only Chinese now.
     - example: enable `not_exist` in [virtual_writer_test.go](mime/multipart/virtual_writer_test.go), and can check the error code place and reason
   - flog: simple log wrapper used in verify, user need customize it by call `SetLoggerFactory` 
   - mime/multipart/VirtualWriter: 
