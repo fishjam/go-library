@@ -6,12 +6,16 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"github.com/fishjam/go-library/debugutil"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 )
+
+// but failed to return an explicit error.
+var ErrWrongParam = errors.New("wrong param")
 
 // OnProgressCallback provide progress callback when do real POST, it's useful when uploading large files.
 //
@@ -33,6 +37,9 @@ type VirtualPart interface {
 	Close() error
 
 	read(p []byte) (n int, err error)
+
+	//Seek(offset int64, whence int) (int64, error)
+	seekToStart() error
 }
 
 type fieldPart struct {
@@ -60,6 +67,12 @@ func (fp *fieldPart) read(p []byte) (n int, err error) {
 	fp.readOffset += int64(n)
 	return
 }
+
+func (fp *fieldPart) seekToStart() error {
+	fp.readOffset = 0
+	return nil
+}
+
 func (fp *fieldPart) Remain() int64 {
 	return fp.fieldLength - fp.readOffset
 }
@@ -133,6 +146,15 @@ func (fp *filePart) read(p []byte) (n int, err error) {
 	//current read count
 	n = nField + nFile + nLastCrLf
 	return n, err
+}
+
+func (fp *filePart) seekToStart() error {
+	fp.readOffset = 0
+	if fp.file != nil {
+		_, err := fp.file.Seek(0, io.SeekStart)
+		return err
+	}
+	return nil
 }
 
 func (fp *filePart) Remain() int64 {
@@ -285,6 +307,46 @@ func (vw *VirtualWriter) WriteField(fieldName, value string) error {
 	vw.parts = append(vw.parts, &part)
 	vw.totalCount += part.Len()
 	return nil
+}
+
+// used for RepeatableReader, so don't read all contents to memory, must SetCloseAfterRead(false)
+// now just support offset=0 && whence = io.SeekStart
+func (vw *VirtualWriter) Seek(offset int64, whence int) (int64, error) {
+	if offset != 0 || whence != io.SeekStart {
+		return 0, ErrWrongParam
+	}
+
+	switch whence {
+	case io.SeekStart:
+		if offset < 0 || offset > vw.totalCount {
+			return 0, ErrWrongParam
+		}
+
+		for _, part := range vw.parts {
+			_ = debugutil.Verify(part.seekToStart())
+		}
+		vw.readCount = 0
+		vw.readPartIndex = 0
+		//for partIndex := 0; partIndex < len(vw.parts); partIndex++ {
+		//	offset -= vw.parts[partIndex].Len()
+		//	partIndex++
+		//}
+		//vw.readPartIndex = partIndex
+		return vw.readCount, nil
+	//case io.SeekCurrent:
+	//case io.SeekEnd:
+	//	if offset > 0 || offset < -vw.totalCount {
+	//		return 0, ErrWrongParam
+	//	}
+	//	partIndex := len(vw.parts)
+	//	for partIndex > 0 && offset > vw.parts[partIndex].Len() {
+	//		offset -= vw.parts[partIndex].Len()
+	//		partIndex++
+	//	}
+
+	default:
+		return 0, ErrWrongParam
+	}
 }
 
 // Read is used for Reader function(example: body parameter for http.NewRequest),

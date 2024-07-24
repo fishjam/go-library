@@ -73,6 +73,14 @@ func VerifyWithResultEx[T any](result T, err error) (T, error) {
 	return result, err
 }
 
+// two result with error
+func VerifyWithTwoResultEx[R1 any, R2 any](r1 R1, r2 R2, err error) (R1, R2, error) {
+	if err != nil {
+		checkAndHandleError(err, err.Error(), verifyAction, _SKIP_LEVEL)
+	}
+	return r1, r2, err
+}
+
 func Assert(cond bool) {
 	if !cond {
 		err := errors.New("assert fail")
