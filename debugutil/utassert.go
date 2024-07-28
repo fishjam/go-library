@@ -11,7 +11,7 @@ func errorWithInfo(t *testing.T, msg string, skip int) {
 
 	if true {
 		fileName, lineNo, funName := flog.GetCallStackInfo(skip)
-		flog.Warnf("%s:%d: (%s) FAIL, msg=%s, ", fileName, lineNo, funName, msg)
+		flog.WarnExWithPosf(fileName, lineNo, funName, "assert fail, msg=%s", msg)
 		//panic(msg)
 		t.Errorf("") //"FAIL: %s:%d, msg=%s", fname, lineno, msg)
 	} else {

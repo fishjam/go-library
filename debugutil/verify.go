@@ -30,13 +30,14 @@ var verifyAction = ACTION_LOG_ERROR
 func checkAndHandleError(err error, msg string, action CheckErrorAction, skip int) {
 	if err != nil {
 		fileName, lineNo, funName := flog.GetCallStackInfo(skip)
-		msg := fmt.Sprintf("%s:%d (%s) FAIL(%s), msg=%s\n",
-			fileName, lineNo, funName, reflect.TypeOf(err).String(), msg)
 		switch action {
 		case ACTION_LOG_ERROR:
-			flog.Warnf(msg)
+			flog.WarnExWithPosf(fileName, lineNo, funName, "verify fail: err=%s(%s), msg=%s",
+				reflect.TypeOf(err).String(), err.Error(), msg)
 		case ACTION_FATAL_QUIT:
-			panic(msg)
+			newMsg := fmt.Sprintf("%s:%d (%s) FAIL(%s), msg=%s\n",
+				fileName, lineNo, funName, reflect.TypeOf(err).String(), msg)
+			panic(newMsg)
 		}
 	}
 }
@@ -48,6 +49,13 @@ func CheckAndFatalIfError(err error, msg string) {
 func Verify(err error) error {
 	if err != nil {
 		checkAndHandleError(err, err.Error(), verifyAction, _SKIP_LEVEL)
+	}
+	return err
+}
+
+func VerifyWithMessage(err error, msg string) error {
+	if err != nil {
+		checkAndHandleError(err, msg, verifyAction, _SKIP_LEVEL)
 	}
 	return err
 }
