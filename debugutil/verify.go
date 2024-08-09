@@ -18,6 +18,12 @@ const (
 	_SKIP_LEVEL = 3
 )
 
+type Config struct {
+	MoreSkip 			int
+	Message     		string
+	IgnoreExceptions 	[]error
+}
+
 //Notice:
 //  1. when dev, set to ACTION_FATAL_QUIT, so can check error quickly,
 //     then can add error logical for the place that once thought could not go wrong
@@ -46,12 +52,46 @@ func CheckAndFatalIfError(err error, msg string) {
 	checkAndHandleError(err, msg, ACTION_FATAL_QUIT, _SKIP_LEVEL)
 }
 
-func Verify(err error) error {
+func VerifyWithConfig(err error, config *Config) error{
 	if err != nil {
-		checkAndHandleError(err, err.Error(), verifyAction, _SKIP_LEVEL)
+		ignore := false
+		moreSkip := 0
+		msg := err.Error()
+
+		if config != nil {
+			for _, ignoreExc := range config.IgnoreExceptions {
+				if errors.Is(err, ignoreExc) {
+					ignore = true
+					break
+				}
+			}
+			if config.Message != "" {
+				msg = config.Message
+			}
+			moreSkip = config.MoreSkip
+		}
+
+		if !ignore {
+			checkAndHandleError(err, msg, verifyAction, _SKIP_LEVEL + moreSkip)
+		}
 	}
 	return err
 }
+
+func Verify(err error) error {
+	return VerifyWithConfig(err, nil)
+	//if err != nil {
+	//	checkAndHandleError(err, err.Error(), verifyAction, _SKIP_LEVEL)
+	//}
+	//return err
+}
+
+//func VerifyMoreSkip(err error, moreSkip int) error {
+//	if err != nil {
+//		checkAndHandleError(err, err.Error(), verifyAction, _SKIP_LEVEL + moreSkip)
+//	}
+//	return err
+//}
 
 func VerifyWithMessage(err error, msg string) error {
 	if err != nil {
@@ -80,6 +120,15 @@ func VerifyWithResultEx[T any](result T, err error) (T, error) {
 	}
 	return result, err
 }
+
+// two result without error
+func VerifyWithTwoResult[R1 any, R2 any](r1 R1, r2 R2, err error) (R1, R2) {
+	if err != nil {
+		checkAndHandleError(err, err.Error(), verifyAction, _SKIP_LEVEL)
+	}
+	return r1, r2
+}
+
 
 // two result with error
 func VerifyWithTwoResultEx[R1 any, R2 any](r1 R1, r2 R2, err error) (R1, R2, error) {
