@@ -38,10 +38,10 @@ func checkAndHandleError(err error, msg string, action CheckErrorAction, skip in
 		fileName, lineNo, funName := flog.GetCallStackInfo(skip)
 		switch action {
 		case ACTION_LOG_ERROR:
-			flog.WarnExWithPosf(fileName, lineNo, funName, "verify fail: err=%s(%s), msg=%s",
+			flog.WarnExWithPosf(fileName, lineNo, funName, "verify fail: err=%s(%s), msg=%q",
 				reflect.TypeOf(err).String(), err.Error(), msg)
 		case ACTION_FATAL_QUIT:
-			newMsg := fmt.Sprintf("%s:%d (%s) FAIL(%s), msg=%s\n",
+			newMsg := fmt.Sprintf("%s:%d (%s) FAIL(%s), msg=%q\n",
 				fileName, lineNo, funName, reflect.TypeOf(err).String(), msg)
 			panic(newMsg)
 		}
