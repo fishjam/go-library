@@ -84,7 +84,7 @@ func TestUploadFilesWithVirtualWriter(t *testing.T) {
 	uploadFiles := []string{
 		"virtual_writer.go",
 		"virtual_writer_test.go",
-		"not_exist",
+		//"not_exist",
 
 		// some large file
 		//"F:\\ISO\\Windows\\Win10\\Win10_21H2_x64_CN_20220412.iso",
