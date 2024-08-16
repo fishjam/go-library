@@ -79,11 +79,10 @@ func VerifyWithConfig(err error, config *Config) error{
 }
 
 func Verify(err error) error {
-	return VerifyWithConfig(err, nil)
-	//if err != nil {
-	//	checkAndHandleError(err, err.Error(), verifyAction, _SKIP_LEVEL)
-	//}
-	//return err
+	if err != nil {
+		checkAndHandleError(err, err.Error(), verifyAction, _SKIP_LEVEL)
+	}
+	return err
 }
 
 //func VerifyMoreSkip(err error, moreSkip int) error {
