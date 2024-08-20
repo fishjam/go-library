@@ -1,8 +1,10 @@
 package multipart
 
 import (
+	"bytes"
 	"crypto/md5"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/fishjam/go-library/debugutil"
 	"io"
@@ -16,6 +18,14 @@ import (
 	"testing"
 	"time"
 )
+
+var uploadFiles = []string{
+	"virtual_writer.go",
+	"virtual_writer_test.go",
+	//"not_exist",
+	// some large file
+	//"F:\\ISO\\Windows\\Win10\\Win10_21H2_x64_CN_20220412.iso",
+}
 
 // TestUploadFileWithVirtualWriter
 // after this test case run, will create upload folder, and upload some files into it,
@@ -81,14 +91,7 @@ func TestUploadFilesWithVirtualWriter(t *testing.T) {
 	uploadResultExpected := make(map[string]string)
 
 	uploadUrl := fmt.Sprintf("%s%s", ts.URL, "/upload")
-	uploadFiles := []string{
-		"virtual_writer.go",
-		"virtual_writer_test.go",
-		//"not_exist",
 
-		// some large file
-		//"F:\\ISO\\Windows\\Win10\\Win10_21H2_x64_CN_20220412.iso",
-	}
 	params := map[string]string{
 		"key":          "value",
 		"type":         "data",
@@ -174,7 +177,50 @@ func TestUploadFilesWithVirtualWriter(t *testing.T) {
 	if false {
 		time.Sleep(time.Second * 30)
 	}
+}
 
+func TestVirtualWriterSeek(t *testing.T) {
+	mpWrite := NewVirtualWriter()
+	mpWrite.SetCloseAfterRead(false)
+
+	pos, err := mpWrite.Seek(9999, io.SeekStart)
+	debugutil.GoAssertTrue(t, pos == 0 && errors.Is(err, ErrWrongParam), "seek start wrong")
+
+	fileIndex := 0
+	for _, uf := range uploadFiles {
+		fieldName := fmt.Sprintf("file%d", fileIndex)
+		if err := debugutil.Verify(mpWrite.CreateFormFile(fieldName, uf)); err != nil {
+			t.Logf("CreateFormFile error, %+v", err)
+		}
+		fileIndex++
+	}
+
+	Cases := []struct {
+		offset int64
+		whence int
+	}{
+		{0, io.SeekStart},
+		//{0, io.SeekCurrent},
+		//{0, io.SeekEnd},
+		//
+		//{mpWrite.totalCount - 1, io.SeekStart},
+	}
+
+	writer := bytes.NewBuffer(nil)
+	lenght, err := io.Copy(writer, mpWrite)
+	t.Logf("after io.Copy, lenght=%d, err=%+v", lenght, err)
+
+	for _, testCase := range Cases {
+		t.Logf("before mpWrite readCount=%d, totalCount=%d, readPartIndex=%d, len(parts)=%d",
+			mpWrite.readCount, mpWrite.totalCount, mpWrite.readPartIndex, len(mpWrite.parts))
+
+		debugutil.VerifyWithResult(mpWrite.Seek(testCase.offset, testCase.whence))
+
+		t.Logf("after mpWrite readCount=%d, totalCount=%d, readPartIndex=%d, len(parts)=%d",
+			mpWrite.readCount, mpWrite.totalCount, mpWrite.readPartIndex, len(mpWrite.parts))
+	}
+	lenght, err = io.Copy(writer, mpWrite)
+	t.Logf("after second io.Copy, lenght=%d, err=%+v", lenght, err)
 }
 
 func fileCheckSum(fileName string) string {
