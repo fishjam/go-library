@@ -6,7 +6,6 @@ import (
 	"github.com/fishjam/go-library/debugutil"
 	"github.com/fishjam/go-library/flog"
 	"io"
-	"log"
 	"net/http"
 	"reflect"
 )
@@ -22,7 +21,7 @@ type RepeatableReader struct {
 }
 
 func NewRepeatableReader(reader io.Reader) *RepeatableReader {
-	flog.Infof("reader type=%s", reflect.TypeOf(reader).String())
+	flog.Debugf("reader type=%s", reflect.TypeOf(reader).String())
 	readerFunc, length, err := getBodyReaderAndContentLength(reader)
 	if err != nil {
 		return nil
@@ -43,7 +42,7 @@ func (rr *RepeatableReader) Read(p []byte) (n int, err error) {
 
 func (rr *RepeatableReader) Close() error {
 	if closer, ok := rr.orgReader.(io.Closer); ok {
-		flog.Infof("enter RepeatableReader.Close")
+		flog.Debugf("enter RepeatableReader.Close")
 		return closer.Close()
 	}
 	return nil
@@ -70,7 +69,7 @@ func getBodyReaderAndContentLength(rawBody interface{}) (ReaderFunc, int64, erro
 	var bodyReader ReaderFunc
 	var contentLength int64
 
-	log.Printf("readerFunc rawBody type=%s", reflect.TypeOf(rawBody).String())
+	flog.Debugf("readerFunc rawBody type=%s", reflect.TypeOf(rawBody).String())
 
 	switch body := rawBody.(type) {
 	// If they gave us a function already, great! Use it.

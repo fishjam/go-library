@@ -46,7 +46,7 @@ func TestRepeatableReader(t *testing.T) {
 	for _, testCase := range Cases {
 		repeatableReader := NewRepeatableReader(testCase.reader)
 		for i := 0; i < 2; i++ {
-			flog.Infof("read index %d", i)
+			flog.Debugf("read index %d", i)
 			buffer := bytes.NewBuffer(nil)
 			written := debugutil.VerifyWithResult(io.Copy(buffer, repeatableReader))
 			testCase.checkFunc(buffer.Bytes(), written)
@@ -55,7 +55,7 @@ func TestRepeatableReader(t *testing.T) {
 			if subStrLen > 200 {
 				subStrLen = 200
 			}
-			flog.Infof("read all , length=%d, contents=%s", written, buffer.String()[0:subStrLen])
+			flog.Debugf("read all , length=%d, contents=%s", written, buffer.String()[0:subStrLen])
 			_ = debugutil.Verify(repeatableReader.Reset())
 		}
 

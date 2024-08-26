@@ -101,21 +101,21 @@ func VerifyWithMessage(err error, msg string) error {
 
 func VerifyExcept1(err error, ex1 error) error {
 	if err != nil && !errors.Is(ex1, err) {
-		checkAndHandleError(err, err.Error(), verifyAction, _SKIP_LEVEL)
+		checkAndHandleError(err, "", verifyAction, _SKIP_LEVEL)
 	}
 	return err
 }
 
 func VerifyWithResult[T any](result T, err error) T {
 	if err != nil {
-		checkAndHandleError(err, err.Error(), verifyAction, _SKIP_LEVEL)
+		checkAndHandleError(err, "", verifyAction, _SKIP_LEVEL)
 	}
 	return result
 }
 
 func VerifyWithResultEx[T any](result T, err error) (T, error) {
 	if err != nil {
-		checkAndHandleError(err, err.Error(), verifyAction, _SKIP_LEVEL)
+		checkAndHandleError(err, "", verifyAction, _SKIP_LEVEL)
 	}
 	return result, err
 }
@@ -123,7 +123,7 @@ func VerifyWithResultEx[T any](result T, err error) (T, error) {
 // two result without error
 func VerifyWithTwoResult[R1 any, R2 any](r1 R1, r2 R2, err error) (R1, R2) {
 	if err != nil {
-		checkAndHandleError(err, err.Error(), verifyAction, _SKIP_LEVEL)
+		checkAndHandleError(err, "", verifyAction, _SKIP_LEVEL)
 	}
 	return r1, r2
 }
