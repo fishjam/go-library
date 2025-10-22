@@ -1,3 +1,7 @@
+# This project has been frozen and is no longer maintained. Future maintenance move to https://gitee.com/fishjam/go-library
+
+---
+
 # go-library
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/fishjam/go-library.svg)](https://pkg.go.dev/github.com/fishjam/go-library)
